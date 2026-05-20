@@ -661,12 +661,22 @@ async def lookup(update, context):
         return
     await delete_join_message(context, chat_id)
     user_input = update.message.text.strip()
+    chat_type = update.message.chat.type
+    bot_username = (await context.bot.get_me()).username
+
+    if chat_type in ["group", "supergroup"]:
+        if "@" + bot_username not in user_input:
+            return
+        user_input = user_input.replace("@" + bot_username, "").strip()
+        if not user_input:
+            return
+
     is_username = user_input.startswith("@") and len(user_input) > 1
     digits_only = user_input.lstrip("+")
     is_number = digits_only.isdigit() and len(digits_only) >= 7
 
     if not is_username and not is_number:
-        await chatbot_handler(update, context)
+        await chatbot_handler(update, context, text_override=user_input)
         return
 
     searching = await update.message.reply_text("🔍 Searching...")
@@ -780,33 +790,26 @@ async def broadcast_command(update, context):
     )
 
 
-async def chatbot_handler(update, context):
-    if not update.message or not update.message.text:
+async def chatbot_handler(update, context, text_override=None):
+    if not update.message:
         return
-    chat_type = update.message.chat.type
-    text = update.message.text.strip()
-    bot_username = (await context.bot.get_me()).username
-
-    if chat_type in ["group", "supergroup"]:
-        mentioned = "@" + bot_username in text
-        if not mentioned:
-            return
-        text = text.replace("@" + bot_username, "").strip()
-        if not text:
-            return
+    text = text_override if text_override else (update.message.text or "").strip()
+    if not text:
+        return
 
     if not gemini_model:
-        await update.message.reply_text("❌ Chatbot abhi available nahi hai.", parse_mode="Markdown")
+        await update.message.reply_text("❌ Chatbot abhi available nahi hai.")
         return
 
+    typing_msg = await update.message.reply_text("💭 Soch raha hun...")
     try:
-        typing_msg = await update.message.reply_text("💭 Soch raha hun...")
         response = await asyncio.to_thread(gemini_model.generate_content, text)
         reply = response.text.strip()
         await typing_msg.delete()
         await update.message.reply_text(reply)
     except Exception as e:
-        await update.message.reply_text("❌ Kuch gadbad ho gayi, dobara try karo.")
+        await typing_msg.delete()
+        await update.message.reply_text("❌ AI se connect nahi ho paya. Thodi der mein dobara try karo.\n\nError: " + str(e))
 
 
 if __name__ == "__main__":

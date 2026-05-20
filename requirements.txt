@@ -1,4 +1,4 @@
-python-telegram-bot[all]
+python-telegram-bot[all]==21.6
 requests
 flask
 google-generativeai

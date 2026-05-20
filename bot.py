@@ -1,7 +1,6 @@
 import os
 import asyncio
 import requests
-import google.generativeai as genai
 from flask import Flask
 from threading import Thread
 from telegram import (
@@ -34,12 +33,6 @@ AADHAR_API_URL = "https://ayush-multi-apiv2.onrender.com/adhar?q={aadhar}"
 IFSC_API_URL = "https://ayush-multi-apiv2.onrender.com/ifsc?q={ifsc}"
 FT_OSINT_API = "https://ft-osint-api.duckdns.org/api/tg?key=nxsahilx928x926&info={info}"
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyBekjecs6vImnQgp1VoElGlJqgxpTJConA")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel("gemini-1.5-flash")
-else:
-    gemini_model = None
 
 CHANNEL_USERNAME = "@racksun19"
 CHANNEL_LINK = "https://t.me/racksun19"
@@ -676,7 +669,6 @@ async def lookup(update, context):
     is_number = digits_only.isdigit() and len(digits_only) >= 7
 
     if not is_username and not is_number:
-        await chatbot_handler(update, context, text_override=user_input)
         return
 
     searching = await update.message.reply_text("🔍 Searching...")
@@ -686,6 +678,7 @@ async def lookup(update, context):
         try:
             chat_obj = await context.bot.get_chat(user_input)
             tg_id = chat_obj.id
+            await searching.edit_text("✅ UID Detected: `" + str(tg_id) + "`\n🔍 Number dhundh raha hun...", parse_mode="Markdown")
         except Exception:
             await delete_searching(context, chat_id, searching.message_id)
             await update.message.reply_text("*Data Not Found!*\n\nUsername not found or is private.", parse_mode="Markdown")
@@ -788,28 +781,6 @@ async def broadcast_command(update, context):
         "*Failed:* `" + str(failed) + "`",
         parse_mode="Markdown"
     )
-
-
-async def chatbot_handler(update, context, text_override=None):
-    if not update.message:
-        return
-    text = text_override if text_override else (update.message.text or "").strip()
-    if not text:
-        return
-
-    if not gemini_model:
-        await update.message.reply_text("❌ Chatbot abhi available nahi hai.")
-        return
-
-    typing_msg = await update.message.reply_text("💭 Soch raha hun...")
-    try:
-        response = await asyncio.to_thread(gemini_model.generate_content, text)
-        reply = response.text.strip()
-        await typing_msg.delete()
-        await update.message.reply_text(reply)
-    except Exception as e:
-        await typing_msg.delete()
-        await update.message.reply_text("❌ AI se connect nahi ho paya. Thodi der mein dobara try karo.\n\nError: " + str(e))
 
 
 if __name__ == "__main__":

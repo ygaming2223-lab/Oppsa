@@ -649,10 +649,6 @@ async def lookup(update, context):
     user_id = update.message.from_user.id
     track_user(user_id)
     chat_id = update.message.chat_id
-    if not await is_member(user_id, context):
-        await send_join_message(update, context)
-        return
-    await delete_join_message(context, chat_id)
     user_input = update.message.text.strip()
     chat_type = update.message.chat.type
     bot_username = (await context.bot.get_me()).username

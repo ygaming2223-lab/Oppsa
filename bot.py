@@ -1,7 +1,7 @@
 import os
 import asyncio
 import requests
-import google.generativeai as genai
+from google import genai
 from flask import Flask
 from threading import Thread
 from telegram import (
@@ -36,10 +36,9 @@ FT_OSINT_API = "https://ft-osint-api.duckdns.org/api/tg?key=nxsahilx928x926&info
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyBekjecs6vImnQgp1VoElGlJqgxpTJConA")
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel("gemini-1.5-flash")
+    gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 else:
-    gemini_model = None
+    gemini_client = None
 
 CHANNEL_USERNAME = "@racksun19"
 CHANNEL_LINK = "https://t.me/racksun19"
@@ -806,13 +805,17 @@ async def chatbot_handler(update, context):
         await send_join_message(update, context)
         return
 
-    if not gemini_model:
+    if not gemini_client:
         await update.message.reply_text("❌ Chatbot abhi available nahi hai.", parse_mode="Markdown")
         return
 
     try:
         typing_msg = await update.message.reply_text("💭 Soch raha hun...")
-        response = await asyncio.to_thread(gemini_model.generate_content, text)
+        response = await asyncio.to_thread(
+            gemini_client.models.generate_content,
+            model="gemini-2.0-flash",
+            contents=text
+        )
         reply = response.text.strip()
         await typing_msg.delete()
         await update.message.reply_text(reply)

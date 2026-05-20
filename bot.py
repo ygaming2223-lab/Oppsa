@@ -678,7 +678,6 @@ async def lookup(update, context):
         try:
             chat_obj = await context.bot.get_chat(user_input)
             tg_id = chat_obj.id
-            await searching.edit_text("✅ UID Detected: `" + str(tg_id) + "`\n🔍 Number dhundh raha hun...", parse_mode="Markdown")
         except Exception:
             await delete_searching(context, chat_id, searching.message_id)
             await update.message.reply_text("*Data Not Found!*\n\nUsername not found or is private.", parse_mode="Markdown")
@@ -704,24 +703,6 @@ async def lookup(update, context):
     phone = tg_number_info.get("number") or (data.get("phone_info") or {}).get("number")
     country = tg_number_info.get("country")
     country_code = tg_number_info.get("country_code")
-
-    number_details_list = []
-    nd = data.get("number_details") or {}
-    nd_data = nd.get("data") or {}
-    if isinstance(nd_data, dict):
-        raw_list = nd_data.get("data") or []
-        if isinstance(raw_list, list):
-            for r in raw_list:
-                number_details_list.append({
-                    "name": r.get("name") or r.get("NAME"),
-                    "father": r.get("fname"),
-                    "mobile": r.get("mobile") or r.get("MOBILE"),
-                    "alt": r.get("alt"),
-                    "aadhar": r.get("id"),
-                    "email": r.get("email"),
-                    "circle": r.get("circle"),
-                    "address": r.get("address") or r.get("ADDRESS"),
-                })
 
     await delete_searching(context, chat_id, searching.message_id)
 

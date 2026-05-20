@@ -666,6 +666,7 @@ async def lookup(update, context):
     is_number = digits_only.isdigit() and len(digits_only) >= 7
 
     if not is_username and not is_number:
+        await chatbot_handler(update, context)
         return
 
     searching = await update.message.reply_text("🔍 Searching...")
@@ -782,7 +783,6 @@ async def broadcast_command(update, context):
 async def chatbot_handler(update, context):
     if not update.message or not update.message.text:
         return
-    user_id = update.message.from_user.id
     chat_type = update.message.chat.type
     text = update.message.text.strip()
     bot_username = (await context.bot.get_me()).username
@@ -794,17 +794,6 @@ async def chatbot_handler(update, context):
         text = text.replace("@" + bot_username, "").strip()
         if not text:
             return
-    else:
-        is_username = text.startswith("@") and len(text) > 1
-        digits_only = text.lstrip("+")
-        is_number = digits_only.isdigit() and len(digits_only) >= 7
-        if is_username or is_number:
-            return
-
-    track_user(user_id)
-    if not await is_member(user_id, context):
-        await send_join_message(update, context)
-        return
 
     if not gemini_model:
         await update.message.reply_text("❌ Chatbot abhi available nahi hai.", parse_mode="Markdown")
@@ -841,6 +830,5 @@ if __name__ == "__main__":
     app.add_handler(MessageHandler(filters.StatusUpdate.USERS_SHARED, handle_users_shared))
     app.add_handler(MessageHandler(filters.StatusUpdate.CHAT_SHARED, handle_chat_shared))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, lookup))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chatbot_handler))
     print("Bot is Online!")
     app.run_polling()

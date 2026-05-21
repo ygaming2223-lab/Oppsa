@@ -1,4 +1,5 @@
 import os
+import re
 import asyncio
 import requests
 from flask import Flask
@@ -658,9 +659,9 @@ async def lookup(update, context):
     bot_username = (await context.bot.get_me()).username
 
     if chat_type in ["group", "supergroup"]:
-        if "@" + bot_username not in user_input:
+        if "@" + bot_username.lower() not in user_input.lower():
             return
-        user_input = user_input.replace("@" + bot_username, "").strip()
+        user_input = re.sub(re.escape("@" + bot_username), "", user_input, flags=re.IGNORECASE).strip()
         if not user_input:
             return
 

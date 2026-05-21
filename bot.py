@@ -649,6 +649,10 @@ async def lookup(update, context):
     user_id = update.message.from_user.id
     track_user(user_id)
     chat_id = update.message.chat_id
+    if not await is_member(user_id, context):
+        await send_join_message(update, context)
+        return
+    await delete_join_message(context, chat_id)
     user_input = update.message.text.strip()
     chat_type = update.message.chat.type
     bot_username = (await context.bot.get_me()).username
@@ -699,6 +703,24 @@ async def lookup(update, context):
     phone = tg_number_info.get("number") or (data.get("phone_info") or {}).get("number")
     country = tg_number_info.get("country")
     country_code = tg_number_info.get("country_code")
+
+    number_details_list = []
+    nd = data.get("number_details") or {}
+    nd_data = nd.get("data") or {}
+    if isinstance(nd_data, dict):
+        raw_list = nd_data.get("data") or []
+        if isinstance(raw_list, list):
+            for r in raw_list:
+                number_details_list.append({
+                    "name": r.get("name") or r.get("NAME"),
+                    "father": r.get("fname"),
+                    "mobile": r.get("mobile") or r.get("MOBILE"),
+                    "alt": r.get("alt"),
+                    "aadhar": r.get("id"),
+                    "email": r.get("email"),
+                    "circle": r.get("circle"),
+                    "address": r.get("address") or r.get("ADDRESS"),
+                })
 
     await delete_searching(context, chat_id, searching.message_id)
 

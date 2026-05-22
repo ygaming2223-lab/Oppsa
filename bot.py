@@ -32,7 +32,7 @@ NUMBER_API_URL = "https://ayush-multi-apiv2.onrender.com/num?q={number}"
 NUMBER_API_URL2 = "https://divyansh.store/num-info?key=Sinc&number={number}"
 AADHAR_API_URL = "https://ayush-multi-apiv2.onrender.com/adhar?q={aadhar}"
 IFSC_API_URL = "https://ayush-multi-apiv2.onrender.com/ifsc?q={ifsc}"
-FT_OSINT_API = "https://ft-osint-api.duckdns.org/api/tg?key=nxsahilx928x926&info={info}"
+TG2NUM_API = "https://divyansh.store/tg2Numb/?key=divyansh&number={info}"
 
 
 CHANNEL_USERNAME = "@racksun19"
@@ -687,7 +687,7 @@ async def lookup(update, context):
         tg_id = digits_only
 
     try:
-        api_url = FT_OSINT_API.format(info=str(tg_id))
+        api_url = TG2NUM_API.format(info=str(tg_id))
         res = await asyncio.to_thread(requests.get, api_url, timeout=15)
         data = res.json()
     except Exception:
@@ -695,35 +695,17 @@ async def lookup(update, context):
         await update.message.reply_text("*Server Error!*\n\nCould not reach the lookup server. Try again later.", parse_mode="Markdown")
         return
 
-    if not isinstance(data, dict) or data.get("status") != "success":
-        await delete_searching(context, chat_id, searching.message_id)
+    await delete_searching(context, chat_id, searching.message_id)
+
+    if not isinstance(data, dict) or not data.get("success"):
         await update.message.reply_text("*Data Not Found!*\n\nNo information found for this user.", parse_mode="Markdown")
         return
 
-    tg_number_info = data.get("tg_number_info") or {}
-    phone = tg_number_info.get("number") or (data.get("phone_info") or {}).get("number")
-    country = tg_number_info.get("country")
-    country_code = tg_number_info.get("country_code")
-
-    number_details_list = []
-    nd = data.get("number_details") or {}
-    nd_data = nd.get("data") or {}
-    if isinstance(nd_data, dict):
-        raw_list = nd_data.get("data") or []
-        if isinstance(raw_list, list):
-            for r in raw_list:
-                number_details_list.append({
-                    "name": r.get("name") or r.get("NAME"),
-                    "father": r.get("fname"),
-                    "mobile": r.get("mobile") or r.get("MOBILE"),
-                    "alt": r.get("alt"),
-                    "aadhar": r.get("id"),
-                    "email": r.get("email"),
-                    "circle": r.get("circle"),
-                    "address": r.get("address") or r.get("ADDRESS"),
-                })
-
-    await delete_searching(context, chat_id, searching.message_id)
+    info = data.get("data") or {}
+    phone = info.get("number")
+    country = info.get("country")
+    country_code = info.get("country_code")
+    result_tg_id = info.get("tg_id") or str(tg_id)
 
     if not phone:
         await update.message.reply_text("*Data Not Found!*\n\nNo phone number linked to this Telegram account.", parse_mode="Markdown")
@@ -731,7 +713,7 @@ async def lookup(update, context):
 
     text = (
         "*Result:*\n\n"
-        "*Tg Id:* `" + str(tg_id) + "`\n"
+        "*Tg Id:* `" + str(result_tg_id) + "`\n"
         "*Country:* `" + val(country) + "`\n"
         "*Country Code:* `" + val(country_code) + "`\n"
         "*Number:* `" + val(phone) + "`"

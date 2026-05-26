@@ -32,8 +32,7 @@ NUMBER_API_URL = "https://ayush-multi-apiv2.onrender.com/num?q={number}"
 NUMBER_API_URL2 = "https://divyansh.store/num-info?key=Sinc&number={number}"
 AADHAR_API_URL = "https://ayush-multi-apiv2.onrender.com/adhar?q={aadhar}"
 IFSC_API_URL = "https://ayush-multi-apiv2.onrender.com/ifsc?q={ifsc}"
-TG2NUM_API = "https://divyansh.store/tg2Numb/?key=divyansh&number={info}"
-TG2NUM_API2 = "https://shivam-ultra-api.vercel.app/tg?key=Y&id={info}"
+FT_OSINT_API = "http://ft-osint-api.duckdns.org/api/tg?key=nxsahilx928x926&info={info}"
 
 
 CHANNEL_USERNAME = "@racksun19"
@@ -687,41 +686,34 @@ async def lookup(update, context):
     else:
         tg_id = digits_only
 
-    data = None
     try:
-        api_url = TG2NUM_API.format(info=str(tg_id))
+        api_url = FT_OSINT_API.format(info=str(tg_id))
         res = await asyncio.to_thread(requests.get, api_url, timeout=15)
-        resp = res.json()
-        if isinstance(resp, dict) and resp.get("success") and resp.get("data", {}).get("number"):
-            data = resp
+        data = res.json()
     except Exception:
-        pass
-
-    if not data:
-        try:
-            api_url2 = TG2NUM_API2.format(info=str(tg_id))
-            res2 = await asyncio.to_thread(requests.get, api_url2, timeout=15)
-            resp2 = res2.json()
-            if isinstance(resp2, dict) and resp2.get("success") and resp2.get("data", {}).get("number"):
-                data = resp2
-        except Exception:
-            pass
+        await delete_searching(context, chat_id, searching.message_id)
+        await update.message.reply_text("*Server Error!*\n\nCould not reach the lookup server. Try again later.", parse_mode="Markdown")
+        return
 
     await delete_searching(context, chat_id, searching.message_id)
 
-    if not data:
+    if not isinstance(data, dict) or data.get("status") != "success":
+        await update.message.reply_text("*Data Not Found!*\n\nNo information found for this user.", parse_mode="Markdown")
+        return
+
+    tg_number_info = data.get("tg_number_info") or {}
+    phone_info = data.get("phone_info") or {}
+    phone = tg_number_info.get("number") or phone_info.get("number")
+    country = tg_number_info.get("country")
+    country_code = tg_number_info.get("country_code")
+
+    if not phone:
         await update.message.reply_text("*Data Not Found!*\n\nNo phone number linked to this Telegram account.", parse_mode="Markdown")
         return
 
-    info = data.get("data") or {}
-    phone = info.get("number")
-    country = info.get("country")
-    country_code = info.get("country_code")
-    result_tg_id = info.get("tg_id") or str(tg_id)
-
     text = (
         "*Result:*\n\n"
-        "*Tg Id:* `" + str(result_tg_id) + "`\n"
+        "*Tg Id:* `" + str(tg_id) + "`\n"
         "*Country:* `" + val(country) + "`\n"
         "*Country Code:* `" + val(country_code) + "`\n"
         "*Number:* `" + val(phone) + "`"

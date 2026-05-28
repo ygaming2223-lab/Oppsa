@@ -32,9 +32,7 @@ NUMBER_API_URL = "https://ayush-multi-apiv2.onrender.com/num?q={number}"
 NUMBER_API_URL2 = "https://divyansh.store/num-info?key=Sinc&number={number}"
 AADHAR_API_URL = "https://ayush-multi-apiv2.onrender.com/adhar?q={aadhar}"
 IFSC_API_URL = "https://ayush-multi-apiv2.onrender.com/ifsc?q={ifsc}"
-FT_OSINT_API = "http://ft-osint-api.duckdns.org/api/tg?key=nxsahilx928x926&info={info}"
-IGFOLLOWS_API = "https://api.igfollows.site/TG/index.php?type=user&key=OGGYxKRISH&term={info}"
-SHIVAM_API = "https://shivam-ultra-api.vercel.app/tg?key=Y&id={info}"
+DIVYANSH_API = "http://divyansh.store/tg2Numb/?key=since&number={info}"
 
 
 CHANNEL_USERNAME = "@racksun19"
@@ -688,56 +686,37 @@ async def lookup(update, context):
     else:
         tg_id = digits_only
 
-    def extract_tg_result(data):
-        if not isinstance(data, dict):
-            return None
-        # FT OSINT format
-        if data.get("status") == "success":
-            tni = data.get("tg_number_info") or {}
-            pi = data.get("phone_info") or {}
-            phone = tni.get("number") or pi.get("number")
-            if phone:
-                return {"phone": phone, "country": tni.get("country"), "country_code": tni.get("country_code")}
-        # igfollows format
-        if data.get("success") and isinstance(data.get("result"), dict):
-            r = data["result"]
-            if r.get("number"):
-                return {"phone": r["number"], "country": r.get("country"), "country_code": r.get("country_code")}
-        # shivam format
-        if data.get("success") and isinstance(data.get("data"), dict):
-            d = data["data"]
-            if d.get("number"):
-                return {"phone": d["number"], "country": d.get("country"), "country_code": d.get("country_code")}
-        return None
-
-    apis = [
-        FT_OSINT_API.format(info=str(tg_id)),
-        IGFOLLOWS_API.format(info=str(tg_id)),
-        SHIVAM_API.format(info=str(tg_id)),
-    ]
-
-    result = None
-    for api_url in apis:
-        try:
-            res = await asyncio.to_thread(requests.get, api_url, timeout=15)
-            result = extract_tg_result(res.json())
-            if result:
-                break
-        except Exception:
-            continue
+    try:
+        api_url = DIVYANSH_API.format(info=str(tg_id))
+        res = await asyncio.to_thread(requests.get, api_url, timeout=15)
+        data = res.json()
+    except Exception:
+        await delete_searching(context, chat_id, searching.message_id)
+        await update.message.reply_text("*Server Error!*\n\nCould not reach the lookup server. Try again later.", parse_mode="Markdown")
+        return
 
     await delete_searching(context, chat_id, searching.message_id)
 
-    if not result:
+    inner = None
+    if isinstance(data, dict):
+        r = data.get("results") or {}
+        if isinstance(r, dict):
+            inner = r.get("results")
+
+    if not isinstance(inner, dict) or not inner.get("n"):
         await update.message.reply_text("*Data Not Found!*\n\nNo phone number linked to this Telegram account.", parse_mode="Markdown")
         return
+
+    phone = inner.get("n")
+    country = inner.get("c")
+    country_code = inner.get("cc")
 
     text = (
         "*Result:*\n\n"
         "*Tg Id:* `" + str(tg_id) + "`\n"
-        "*Country:* `" + val(result.get("country")) + "`\n"
-        "*Country Code:* `" + val(result.get("country_code")) + "`\n"
-        "*Number:* `" + val(result.get("phone")) + "`"
+        "*Country:* `" + val(country) + "`\n"
+        "*Country Code:* `" + val(country_code) + "`\n"
+        "*Number:* `" + val(phone) + "`"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 

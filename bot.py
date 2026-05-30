@@ -32,7 +32,7 @@ NUMBER_API_URL = "https://ayush-multi-apiv2.onrender.com/num?q={number}"
 NUMBER_API_URL2 = "https://divyansh.store/num-info?key=Sinc&number={number}"
 AADHAR_API_URL = "https://ayush-multi-apiv2.onrender.com/adhar?q={aadhar}"
 IFSC_API_URL = "https://ayush-multi-apiv2.onrender.com/ifsc?q={ifsc}"
-DIVYANSH_API = "http://divyansh.store/tg2Numb/?key=since&number={info}"
+ANON_TG_API = "https://anon-tg-info.vercel.app/tg2num/userid?key=temp40098&q={info}"
 
 
 CHANNEL_USERNAME = "@racksun19"
@@ -687,7 +687,7 @@ async def lookup(update, context):
         tg_id = digits_only
 
     try:
-        api_url = DIVYANSH_API.format(info=str(tg_id))
+        api_url = ANON_TG_API.format(info=str(tg_id))
         res = await asyncio.to_thread(requests.get, api_url, timeout=15)
         data = res.json()
     except Exception:
@@ -697,19 +697,21 @@ async def lookup(update, context):
 
     await delete_searching(context, chat_id, searching.message_id)
 
-    inner = None
+    entry = None
     if isinstance(data, dict):
-        r = data.get("results") or {}
-        if isinstance(r, dict):
-            inner = r.get("results")
+        resp = data.get("response") or {}
+        params = resp.get("parameters") or {}
+        results = resp.get("data") or []
+        if params.get("success") and isinstance(results, list) and len(results) > 0:
+            entry = results[0]
 
-    if not isinstance(inner, dict) or not inner.get("n"):
+    if not entry or not entry.get("number"):
         await update.message.reply_text("*Data Not Found!*\n\nNo phone number linked to this Telegram account.", parse_mode="Markdown")
         return
 
-    phone = inner.get("n")
-    country = inner.get("c")
-    country_code = inner.get("cc")
+    phone = entry.get("number")
+    country = entry.get("country")
+    country_code = entry.get("country_code")
 
     text = (
         "*Result:*\n\n"

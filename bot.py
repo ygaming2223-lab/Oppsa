@@ -33,6 +33,7 @@ NUMBER_API_URL2 = "https://divyansh.store/num-info?key=Sinc&number={number}"
 AADHAR_API_URL = "https://ayush-multi-apiv2.onrender.com/adhar?q={aadhar}"
 IFSC_API_URL = "https://ayush-multi-apiv2.onrender.com/ifsc?q={ifsc}"
 ANON_TG_API = "https://anon-tg-info.vercel.app/tg2num/userid?key=temp40098&q={info}"
+NITIN_API_BASE = "https://all-info-api-nitin.nitinshab43.workers.dev/?key=mykey&endpoint={endpoint}&query={query}"
 
 
 CHANNEL_USERNAME = "@racksun19"
@@ -262,6 +263,10 @@ async def settings_command(update, context):
         "Use `/aadhar <12-digit number>` to fetch linked mobile, address, email\n\n"
         "🏦 *IFSC / Bank Lookup*\n"
         "Use `/ifsc <code>` to fetch bank name, branch, address, UPI/NEFT/RTGS\n\n"
+        "🚗 *Vehicle Lookup*\n"
+        "Use `/vehicle <number>` to fetch owner, address, engine, insurance details\n\n"
+        "📧 *Email Lookup*\n"
+        "Use `/email <email>` to fetch linked mobile, name, address, Aadhaar\n\n"
         "👥 *User / Group / Channel ID*\n"
         "Use the buttons below to get IDs easily\n\n"
         "📝 *Report Issue*\n"
@@ -305,6 +310,14 @@ async def help_command(update, context):
         "  Use the /ifsc command followed by IFSC code.\n\n"
         "  Example:\n"
         "   • `/ifsc SBIN0001234`\n\n"
+        "🚗 *Vehicle Lookup*\n"
+        "  Use the /vehicle command followed by vehicle number.\n\n"
+        "  Example:\n"
+        "   • `/vehicle MH02FZ0555`\n\n"
+        "📧 *Email Lookup*\n"
+        "  Use the /email command followed by email address.\n\n"
+        "  Example:\n"
+        "   • `/email example@gmail.com`\n\n"
         "📝 *Report an Issue*\n"
         "  Use the /report command followed by your message.\n"
         "  Your report will be sent directly to the admin.\n\n"
@@ -315,6 +328,8 @@ async def help_command(update, context):
         "  /num         — Phone number lookup\n"
         "  /aadhar      — Aadhar lookup\n"
         "  /ifsc        — Bank IFSC lookup\n"
+        "  /vehicle     — Vehicle number lookup\n"
+        "  /email       — Email address lookup\n"
         "  /report      — Report an issue to admin\n"
         "  /settings    — Show bot features\n"
         "  /back        — Back to main menu\n"
@@ -723,6 +738,130 @@ async def lookup(update, context):
     await update.message.reply_text(text, parse_mode="Markdown")
 
 
+async def vehicle_lookup(update, context):
+    user_id = update.message.from_user.id
+    track_user(user_id)
+    chat_id = update.message.chat_id
+    if not await is_member(user_id, context):
+        await send_join_message(update, context)
+        return
+    await delete_join_message(context, chat_id)
+    if not context.args:
+        await update.message.reply_text("*Usage:* `/vehicle MH02FZ0555`", parse_mode="Markdown")
+        return
+    query = context.args[0].strip().upper()
+    searching = await update.message.reply_text("🔍 Searching...")
+    try:
+        url = NITIN_API_BASE.format(endpoint="VEHICLE", query=query)
+        res = await asyncio.to_thread(requests.get, url, timeout=25)
+        raw = res.text
+    except Exception:
+        await delete_searching(context, chat_id, searching.message_id)
+        await update.message.reply_text("*Server Error!*\n\nRequest failed. Please try again later.", parse_mode="Markdown")
+        return
+    await delete_searching(context, chat_id, searching.message_id)
+    import json as _json
+    vdata = None
+    try:
+        match = re.search(r'"vehicle_data"\s*:\s*(\{.*?\})\s*,\s*"vahanx"', raw, re.DOTALL)
+        if match:
+            vdata = _json.loads(match.group(1))
+    except Exception:
+        pass
+    if not vdata:
+        await update.message.reply_text("*Data Not Found!*\n\nNo information found for this vehicle.", parse_mode="Markdown")
+        return
+    engine = val(vdata.get("engine"))
+    chassis = val(vdata.get("chassis"))
+    owner = val(vdata.get("owner"))
+    father = val(vdata.get("ownerFatherName"))
+    reg_date = val(vdata.get("regDate"))
+    manufacturer = val(vdata.get("manufacturer"))
+    vehicle = val(vdata.get("vehicle"))
+    variant = val(vdata.get("variant"))
+    fuel = val(vdata.get("fuelType"))
+    vehicle_class = val(vdata.get("vehicleClass"))
+    address = val(vdata.get("presentAddress"))
+    insurance = val(vdata.get("insuranceCompanyName"))
+    insurance_upto = val(vdata.get("insuranceUpto"))
+    financer = val(vdata.get("financerName"))
+    rto = val((vdata.get("rtoData") or {}).get("rtoName"))
+    text = (
+        "🚗 *Vehicle Info*\n\n"
+        "*Reg No:* `" + query + "`\n"
+        "*Owner:* `" + owner + "`\n"
+        "*Father:* `" + father + "`\n"
+        "*Address:* `" + address + "`\n\n"
+        "*Manufacturer:* `" + manufacturer + "`\n"
+        "*Model:* `" + vehicle + "`\n"
+        "*Variant:* `" + variant + "`\n"
+        "*Class:* `" + vehicle_class + "`\n"
+        "*Fuel:* `" + fuel + "`\n"
+        "*Reg Date:* `" + reg_date + "`\n"
+        "*RTO:* `" + rto + "`\n\n"
+        "*Engine No:* `" + engine + "`\n"
+        "*Chassis No:* `" + chassis + "`\n"
+        "*Financer:* `" + financer + "`\n"
+        "*Insurance:* `" + insurance + "`\n"
+        "*Insurance Upto:* `" + insurance_upto + "`"
+    )
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+
+async def email_lookup(update, context):
+    user_id = update.message.from_user.id
+    track_user(user_id)
+    chat_id = update.message.chat_id
+    if not await is_member(user_id, context):
+        await send_join_message(update, context)
+        return
+    await delete_join_message(context, chat_id)
+    if not context.args:
+        await update.message.reply_text("*Usage:* `/email example@gmail.com`", parse_mode="Markdown")
+        return
+    query = context.args[0].strip()
+    searching = await update.message.reply_text("🔍 Searching...")
+    try:
+        url = NITIN_API_BASE.format(endpoint="EMAIL", query=query)
+        res = await asyncio.to_thread(requests.get, url, timeout=20)
+        raw = res.text
+    except Exception:
+        await delete_searching(context, chat_id, searching.message_id)
+        await update.message.reply_text("*Server Error!*\n\nRequest failed. Please try again later.", parse_mode="Markdown")
+        return
+    await delete_searching(context, chat_id, searching.message_id)
+    entries = re.split(r'\[\d+\]', raw)
+    entries = [e.strip() for e in entries if e.strip() and "📱" in e]
+    if not entries:
+        await update.message.reply_text("*Data Not Found!*\n\nNo information found for this email.", parse_mode="Markdown")
+        return
+    total = len(entries)
+    show = entries[:5]
+    for i, entry in enumerate(show):
+        def get_field(label, text):
+            m = re.search(label + r"[:\s]+(.+)", text)
+            return m.group(1).strip() if m else "None"
+        mobile = get_field("Mobile", entry)
+        name = get_field("Name", entry)
+        father = get_field("Father", entry)
+        address = get_field("Address", entry)
+        alternate = get_field("Alternate", entry)
+        circle = get_field("Circle", entry)
+        aadhar = get_field("Aadhaar", entry)
+        text = (
+            "*Result " + str(i + 1) + "/" + str(min(5, total)) + "* _(Total: " + str(total) + ")_\n\n"
+            "*Email:* `" + query + "`\n"
+            "*Mobile:* `" + val(mobile) + "`\n"
+            "*Name:* `" + val(name) + "`\n"
+            "*Father:* `" + val(father) + "`\n"
+            "*Alt Mobile:* `" + val(alternate) + "`\n"
+            "*Circle:* `" + val(circle) + "`\n"
+            "*Aadhaar:* `" + val(aadhar) + "`\n"
+            "*Address:* `" + clean_address(address) + "`"
+        )
+        await update.message.reply_text(text, parse_mode="Markdown")
+
+
 async def broadcast_command(update, context):
     user_id = update.message.from_user.id
     if user_id != ADMIN_ID:
@@ -776,6 +915,8 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("num", num_lookup))
     app.add_handler(CommandHandler("aadhar", aadhar_lookup))
     app.add_handler(CommandHandler("ifsc", ifsc_lookup))
+    app.add_handler(CommandHandler("vehicle", vehicle_lookup))
+    app.add_handler(CommandHandler("email", email_lookup))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("settings", settings_command))
     app.add_handler(CommandHandler("back", back_command))

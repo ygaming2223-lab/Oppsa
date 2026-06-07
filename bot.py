@@ -1033,7 +1033,7 @@ async def num_lookup(update, context):
         not_found_msg = "*❌ Data Not Found!*\n\nNo information found for this number."
         if not is_premium_user(user_id) and user_id != ADMIN_ID:
             num_count, _, _ = get_daily_counts(user_id)
-            not_found_msg += "\n\n✅ *Search credit refunded!* _(daily count not incremented)_\n📊 Used: `" + str(num_count) + "/" + str(FREE_NUM_LIMIT) + "` today"
+            not_found_msg += "\n\n✅ _Credit not used._"
         await update.message.reply_text(not_found_msg, parse_mode="Markdown")
         return
 
@@ -1123,7 +1123,7 @@ async def aadhar_lookup(update, context):
         not_found_msg = "*❌ Data Not Found!*\n\nNo information found for this Aadhar."
         if not is_premium_user(user_id) and user_id != ADMIN_ID:
             aadhar_count = get_daily_aadhar_count(user_id)
-            not_found_msg += "\n\n✅ *Search credit refunded!* _(daily count not incremented)_\n📊 Used: `" + str(aadhar_count) + "/" + str(FREE_NUM_LIMIT) + "` today"
+            not_found_msg += "\n\n✅ _Credit not used._"
         await update.message.reply_text(not_found_msg, parse_mode="Markdown")
         return
 
@@ -1200,7 +1200,7 @@ async def veh_lookup(update, context):
         not_found_msg = "*❌ Data Not Found!*\n\nNo information found for this vehicle number."
         if not is_premium_user(user_id) and user_id != ADMIN_ID:
             veh_count = get_daily_veh_count(user_id)
-            not_found_msg += "\n\n✅ *Search credit refunded!* _(daily count not incremented)_\n📊 Used: `" + str(veh_count) + "/" + str(FREE_VEH_LIMIT) + "` today"
+            not_found_msg += "\n\n✅ _Credit not used._"
         await update.message.reply_text(not_found_msg, parse_mode="Markdown")
         return
 
@@ -1262,7 +1262,7 @@ async def veh_lookup(update, context):
         not_found_msg = "*❌ Data Not Found!*\n\nNo information found for this vehicle number."
         if not is_premium_user(user_id) and user_id != ADMIN_ID:
             veh_count = get_daily_veh_count(user_id)
-            not_found_msg += "\n\n✅ *Search credit refunded!* _(daily count not incremented)_\n📊 Used: `" + str(veh_count) + "/" + str(FREE_VEH_LIMIT) + "` today"
+            not_found_msg += "\n\n✅ _Credit not used._"
         await update.message.reply_text(not_found_msg, parse_mode="Markdown")
         return
 
@@ -1340,7 +1340,7 @@ async def lookup(update, context):
         base = "*❌ Data Not Found!*\n\nNo data linked to this Telegram account."
         if not is_premium_user(uid) and uid != ADMIN_ID:
             _, tg_count, _ = get_daily_counts(uid)
-            base += "\n\n✅ *Search credit refunded!* _(daily count not incremented)_\n📊 Used: `" + str(tg_count) + "/" + str(FREE_TG_LIMIT) + "` today"
+            base += "\n\n✅ _Credit not used._"
         return base
 
     # Check for error / not found
@@ -1586,6 +1586,57 @@ async def mypremium_command(update, context):
     await update.message.reply_text(text, parse_mode="Markdown")
 
 
+async def myplan_command(update, context):
+    if not await guard(update, context):
+        return
+    user_id = update.message.from_user.id
+    premium = is_premium_user(user_id)
+    check_and_reset_daily(user_id)
+    num_count, tg_count, aadhar_count = get_daily_counts(user_id)
+    veh_count = get_daily_veh_count(user_id)
+
+    if premium:
+        expiry = get_premium_expiry(user_id)
+        text = (
+            "⭐ *Your Plan: Premium*\n\n"
+            "*Expires:* `" + expiry + "`\n\n"
+            "📞 Number: `" + str(num_count) + "` used _(Unlimited)_\n"
+            "🪪 Aadhar: `" + str(aadhar_count) + "` used _(Unlimited)_\n"
+            "🚗 Vehicle: `" + str(veh_count) + "` used _(Unlimited)_\n"
+            "📱 TG Lookup: `" + str(tg_count) + "` used _(Unlimited)_"
+        )
+    else:
+        text = (
+            "🆓 *Your Plan: Free*\n\n"
+            "*Today's Usage:*\n"
+            "📞 Number: `" + str(num_count) + "/" + str(FREE_NUM_LIMIT) + "`\n"
+            "🪪 Aadhar: `" + str(aadhar_count) + "/" + str(FREE_NUM_LIMIT) + "`\n"
+            "🚗 Vehicle: `" + str(veh_count) + "/" + str(FREE_VEH_LIMIT) + "`\n"
+            "📱 TG Lookup: `" + str(tg_count) + "/" + str(FREE_TG_LIMIT) + "`\n\n"
+            "👉 Use /paidplan to see premium benefits."
+        )
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+
+async def paidplan_command(update, context):
+    if not await guard(update, context):
+        return
+    text = (
+        "⭐ *Premium Plan — Benefits*\n\n"
+        "📞 Number Lookup: *Unlimited*\n"
+        "🪪 Aadhar Lookup: *Unlimited*\n"
+        "🚗 Vehicle Lookup: *Unlimited*\n"
+        "📱 TG Lookup: *Unlimited*\n\n"
+        "🆓 *Free Plan Limits:*\n"
+        "📞 Number: `" + str(FREE_NUM_LIMIT) + "/day`\n"
+        "🪪 Aadhar: `" + str(FREE_NUM_LIMIT) + "/day`\n"
+        "🚗 Vehicle: `" + str(FREE_VEH_LIMIT) + "/day`\n"
+        "📱 TG Lookup: `" + str(FREE_TG_LIMIT) + "/day`\n\n"
+        "💬 *To get Premium, contact:* @racksunn"
+    )
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+
 if __name__ == "__main__":
     init_db()
     keep_alive()
@@ -1609,6 +1660,8 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("removepremium", removepremium_command))
     app.add_handler(CommandHandler("premiumlist", premiumlist_command))
     app.add_handler(CommandHandler("mypremium", mypremium_command))
+    app.add_handler(CommandHandler("myplan", myplan_command))
+    app.add_handler(CommandHandler("paidplan", paidplan_command))
     app.add_handler(CommandHandler("adminhelp", adminhelp_command))
     app.add_handler(CommandHandler("maintenance", maintenance_command))
     app.add_handler(CallbackQueryHandler(check_joined_callback, pattern="check_joined"))

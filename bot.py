@@ -1216,7 +1216,7 @@ async def veh_lookup(update, context):
                 parse_mode="Markdown",
             )
 
-    SKIP_KEYS = {"status", "message", "msg", "error", "success", "code", "key"}
+    SKIP_KEYS = {"status", "message", "msg", "error", "success", "code", "key", "developer", "attempt", "cached", "mob raw", "response code", "vnum"}
     LABEL_MAP = {
         "rc_regn_no": "Plate No", "reg_no": "Plate No",
         "rc_owner_name": "Owner Name", "owner": "Owner Name",

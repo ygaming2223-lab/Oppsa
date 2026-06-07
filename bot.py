@@ -66,11 +66,6 @@ def init_db():
             username          TEXT,
             join_date         TEXT,
             search_count      INTEGER DEFAULT 0,
-            is_banned         INTEGER DEFAULT 0,
-            ban_reason        TEXT DEFAULT '',
-            is_muted          INTEGER DEFAULT 0,
-            mute_reason       TEXT DEFAULT '',
-            warn_count        INTEGER DEFAULT 0,
             is_premium        INTEGER DEFAULT 0,
             premium_expiry    TEXT DEFAULT '',
             num_searches_today  INTEGER DEFAULT 0,
@@ -128,7 +123,7 @@ def increment_search(user_id):
 def get_user_info_db(user_id):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT user_id, first_name, username, join_date, search_count, is_banned, ban_reason, is_muted, mute_reason FROM users WHERE user_id=?", (user_id,))
+    c.execute("SELECT user_id, first_name, username, join_date, search_count FROM users WHERE user_id=?", (user_id,))
     row = c.fetchone()
     conn.close()
     return row
@@ -139,92 +134,22 @@ def get_stats_db():
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM users")
     total = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM users WHERE is_banned=1")
-    banned = c.fetchone()[0]
     c.execute("SELECT SUM(search_count) FROM users")
     searches = c.fetchone()[0] or 0
     today = datetime.now().strftime("%d %b %Y")
     c.execute("SELECT COUNT(*) FROM users WHERE join_date=?", (today,))
     today_joined = c.fetchone()[0]
     conn.close()
-    return total, banned, searches, today_joined
-
-
-def ban_user_db(user_id, reason=""):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("UPDATE users SET is_banned=1, ban_reason=? WHERE user_id=?", (reason, user_id))
-    conn.commit()
-    conn.close()
-
-
-def unban_user_db(user_id):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("UPDATE users SET is_banned=0, ban_reason='' WHERE user_id=?", (user_id,))
-    conn.commit()
-    conn.close()
-
-
-def mute_user_db(user_id, reason=""):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("UPDATE users SET is_muted=1, mute_reason=? WHERE user_id=?", (reason, user_id))
-    conn.commit()
-    conn.close()
-
-
-def unmute_user_db(user_id):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("UPDATE users SET is_muted=0, mute_reason='' WHERE user_id=?", (user_id,))
-    conn.commit()
-    conn.close()
-
-
-def get_banned_list_db():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT user_id, first_name, username, ban_reason FROM users WHERE is_banned=1")
-    rows = c.fetchall()
-    conn.close()
-    return rows
-
-
-def get_muted_list_db():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT user_id, first_name, username, mute_reason FROM users WHERE is_muted=1")
-    rows = c.fetchall()
-    conn.close()
-    return rows
+    return total, searches, today_joined
 
 
 def get_all_user_ids_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT user_id FROM users WHERE is_banned=0")
+    c.execute("SELECT user_id FROM users")
     rows = [r[0] for r in c.fetchall()]
     conn.close()
     return rows
-
-
-def is_user_banned(user_id):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT is_banned FROM users WHERE user_id=?", (user_id,))
-    row = c.fetchone()
-    conn.close()
-    return row and row[0] == 1
-
-
-def is_user_muted(user_id):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT is_muted FROM users WHERE user_id=?", (user_id,))
-    row = c.fetchone()
-    conn.close()
-    return row and row[0] == 1
 
 
 def is_admin(user_id):
@@ -242,34 +167,6 @@ async def check_admin(update, context):
         except Exception:
             pass
     return is_admin(user_id)
-
-
-def add_warn_db(user_id):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("UPDATE users SET warn_count = warn_count + 1 WHERE user_id=?", (user_id,))
-    conn.commit()
-    c.execute("SELECT warn_count FROM users WHERE user_id=?", (user_id,))
-    row = c.fetchone()
-    conn.close()
-    return row[0] if row else 1
-
-
-def get_warn_count_db(user_id):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT warn_count FROM users WHERE user_id=?", (user_id,))
-    row = c.fetchone()
-    conn.close()
-    return row[0] if row else 0
-
-
-def reset_warn_db(user_id):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("UPDATE users SET warn_count=0 WHERE user_id=?", (user_id,))
-    conn.commit()
-    conn.close()
 
 
 def add_premium_db(user_id, days):
@@ -652,20 +549,6 @@ async def guard(update, context):
 
     track_user(user_id, user.first_name, user.username)
 
-    if is_user_banned(user_id):
-        await update.message.reply_text(
-            "🚫 *You have been banned from using this bot.*\n\nContact admin if you think this is a mistake.",
-            parse_mode="Markdown",
-        )
-        return False
-
-    if is_user_muted(user_id):
-        await update.message.reply_text(
-            "🔇 *Shhh... quiet now.*\n\nYou are muted and cannot use this bot right now.\nContact admin if you think this is a mistake.",
-            parse_mode="Markdown",
-        )
-        return False
-
     if not await is_member(user_id, context):
         await send_join_message(update, context)
         return False
@@ -936,7 +819,7 @@ async def stats_command(update, context):
     user_id = update.message.from_user.id
     if user_id != ADMIN_ID:
         return
-    total, banned, searches, today_joined = get_stats_db()
+    total, searches, today_joined = get_stats_db()
     premium_count = get_premium_count_db()
     msg = (
         "📊 *Bot Stats*\n\n"
@@ -944,331 +827,9 @@ async def stats_command(update, context):
         "📅 *Joined Today:* `" + str(today_joined) + "`\n"
         "🔍 *Total Searches:* `" + str(searches) + "`\n"
         "⭐ *Premium Users:* `" + str(premium_count) + "`\n"
-        "🚫 *Banned Users:* `" + str(banned) + "`\n"
         "🔧 *Maintenance:* `" + ("ON" if maintenance_mode else "OFF") + "`"
     )
     await update.message.reply_text(msg, parse_mode="Markdown")
-
-
-async def ban_command(update, context):
-    user_id = update.message.from_user.id
-    if not await check_admin(update, context):
-        return
-
-    target_id, reason, err = await resolve_target_id(update, context, context.args or [], with_reason=True)
-    if not target_id:
-        if err == "no_args":
-            await update.message.reply_text(
-                "*Usage:* `/ban <@username / user_id> [reason]`\n"
-                "Or reply to a message: `/ban [reason]`\n\n"
-                "Example: `/ban @drouv Spam karta tha` ya `/ban 98877655`",
-                parse_mode="Markdown",
-            )
-        else:
-            await update.message.reply_text(err or "❌ *Invalid input!*", parse_mode="Markdown")
-        return
-
-    if target_id == ADMIN_ID:
-        await update.message.reply_text("❌ *Cannot ban admin!*", parse_mode="Markdown")
-        return
-
-    ban_user_db(target_id, reason)
-    reason_line = "\n*Reason:* `" + reason + "`" if reason else ""
-    await update.message.reply_text(
-        "✅ *User Banned!*\n\n*User ID:* `" + str(target_id) + "`" + reason_line + "\n\nThey can no longer use the bot.",
-        parse_mode="Markdown",
-    )
-    try:
-        notify = "🚫 *You have been banned from @racksunbot.*"
-        if reason:
-            notify += "\n*Reason:* `" + reason + "`"
-        notify += "\n\nContact admin if you think this is a mistake."
-        await context.bot.send_message(chat_id=target_id, text=notify, parse_mode="Markdown")
-    except Exception:
-        pass
-
-
-async def unban_command(update, context):
-    user_id = update.message.from_user.id
-    if not await check_admin(update, context):
-        return
-    target_id, _, err = await resolve_target_id(update, context, context.args or [])
-    if not target_id:
-        if err == "no_args":
-            await update.message.reply_text(
-                "*Usage:* `/unban <@username / user_id>`\n"
-                "Or reply to a message: `/unban`\n\n"
-                "Example: `/unban @drouv` ya `/unban 98877655`",
-                parse_mode="Markdown",
-            )
-        else:
-            await update.message.reply_text(err or "❌ *Invalid input!*", parse_mode="Markdown")
-        return
-    unban_user_db(target_id)
-    await update.message.reply_text(
-        "✅ *User Unbanned!*\n\n*User ID:* `" + str(target_id) + "`\n\nThey can now use the bot again.",
-        parse_mode="Markdown",
-    )
-    try:
-        await context.bot.send_message(
-            chat_id=target_id,
-            text="✅ *You have been unbanned from @racksunbot.*\n\nSend /start to use the bot.",
-            parse_mode="Markdown",
-        )
-    except Exception:
-        pass
-
-
-async def banlist_command(update, context):
-    user_id = update.message.from_user.id
-    if not await check_admin(update, context):
-        return
-    rows = get_banned_list_db()
-    if not rows:
-        await update.message.reply_text("✅ *No banned users.*", parse_mode="Markdown")
-        return
-    lines = ["🚫 *Banned Users List*\n"]
-    for i, (uid, fname, uname, ban_reason) in enumerate(rows, 1):
-        uname_display = "@" + uname if uname else "N/A"
-        line = str(i) + ". `" + str(uid) + "` — " + val(fname) + " (" + uname_display + ")"
-        if ban_reason:
-            line += "\n    📌 Reason: " + ban_reason
-        lines.append(line)
-    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
-
-
-async def mute_command(update, context):
-    user_id = update.message.from_user.id
-    if not await check_admin(update, context):
-        return
-
-    target_id, reason, err = await resolve_target_id(update, context, context.args or [], with_reason=True)
-    if not target_id:
-        if err == "no_args":
-            await update.message.reply_text(
-                "*Usage:* `/mute <@username / user_id> [reason]`\n"
-                "Or reply to a message: `/mute [reason]`\n\n"
-                "Example: `/mute @drouv Spam kar raha tha` ya `/mute 98877655`",
-                parse_mode="Markdown",
-            )
-        else:
-            await update.message.reply_text(err or "❌ *Invalid input!*", parse_mode="Markdown")
-        return
-
-    if target_id == ADMIN_ID:
-        await update.message.reply_text("❌ *Cannot mute admin!*", parse_mode="Markdown")
-        return
-
-    row = get_user_info_db(target_id)
-    target_name = val(row[1]) if row else str(target_id)
-
-    mute_user_db(target_id, reason)
-    reason_line = "\n*Reason:* `" + reason + "`" if reason else ""
-    await update.message.reply_text(
-        "🔇 *Muted " + target_name + ".*\n\n"
-        "*User ID:* `" + str(target_id) + "`" + reason_line,
-        parse_mode="Markdown",
-    )
-    try:
-        notify = "🔇 *Shhh... quiet now.*\n\n*Muted " + target_name + ".*"
-        if reason:
-            notify += "\n*Reason:* `" + reason + "`"
-        notify += "\n\nContact admin if you think this is a mistake."
-        await context.bot.send_message(chat_id=target_id, text=notify, parse_mode="Markdown")
-    except Exception:
-        pass
-
-
-async def unmute_command(update, context):
-    user_id = update.message.from_user.id
-    if not await check_admin(update, context):
-        return
-
-    target_id, _, err = await resolve_target_id(update, context, context.args or [])
-    if not target_id:
-        if err == "no_args":
-            await update.message.reply_text(
-                "*Usage:* `/unmute <@username / user_id>`\n"
-                "Or reply to a message: `/unmute`\n\n"
-                "Example: `/unmute @drouv` ya `/unmute 98877655`",
-                parse_mode="Markdown",
-            )
-        else:
-            await update.message.reply_text(err or "❌ *Invalid input!*", parse_mode="Markdown")
-        return
-
-    unmute_user_db(target_id)
-    await update.message.reply_text(
-        "✅ *User Unmuted!*\n\n*User ID:* `" + str(target_id) + "`\n\nThey can now use the bot again.",
-        parse_mode="Markdown",
-    )
-    try:
-        await context.bot.send_message(
-            chat_id=target_id,
-            text="✅ *You have been unmuted from @racksunbot.*\n\nYou can use the bot again.",
-            parse_mode="Markdown",
-        )
-    except Exception:
-        pass
-
-
-async def mutelist_command(update, context):
-    user_id = update.message.from_user.id
-    if not await check_admin(update, context):
-        return
-    rows = get_muted_list_db()
-    if not rows:
-        await update.message.reply_text("✅ *No muted users.*", parse_mode="Markdown")
-        return
-    lines = ["🔇 *Muted Users List*\n"]
-    for i, (uid, fname, uname, mute_reason) in enumerate(rows, 1):
-        uname_display = "@" + uname if uname else "N/A"
-        line = str(i) + ". `" + str(uid) + "` — " + val(fname) + " (" + uname_display + ")"
-        if mute_reason:
-            line += "\n    📌 Reason: " + mute_reason
-        lines.append(line)
-    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
-
-
-async def warn_command(update, context):
-    user_id = update.message.from_user.id
-    if not await check_admin(update, context):
-        return
-
-    target_id, reason, err = await resolve_target_id(update, context, context.args or [], with_reason=True)
-    if not target_id:
-        if err == "no_args":
-            await update.message.reply_text(
-                "*Usage:* `/warn <@username / user_id> [reason]`\n"
-                "Or reply to a message: `/warn [reason]`\n\n"
-                "Example: `/warn @drouv Rules tod raha tha` ya `/warn 98877655`",
-                parse_mode="Markdown",
-            )
-        else:
-            await update.message.reply_text(err or "❌ *Invalid input!*", parse_mode="Markdown")
-        return
-
-    if target_id == ADMIN_ID:
-        await update.message.reply_text("❌ *Cannot warn admin!*", parse_mode="Markdown")
-        return
-
-    row = get_user_info_db(target_id)
-    if not row:
-        await update.message.reply_text(
-            "❌ *User not found.*\n\nIs user ne pehle bot use nahi kiya.",
-            parse_mode="Markdown",
-        )
-        return
-
-    target_name = val(row[1]) if row else str(target_id)
-    warn_count = add_warn_db(target_id)
-    MAX_WARNS = 2
-    reason_line = "\n*Reason:* `" + reason + "`" if reason else ""
-
-    if warn_count >= MAX_WARNS:
-        ban_user_db(target_id, "Auto-banned after 2 warnings")
-        reset_warn_db(target_id)
-        await update.message.reply_text(
-            "🚫 *" + target_name + " has been auto-banned!*\n\n"
-            "*User ID:* `" + str(target_id) + "`\n"
-            "*Warnings:* `2/2`\n"
-            "*Reason:* `Auto-banned after 2 warnings`",
-            parse_mode="Markdown",
-        )
-        try:
-            await context.bot.send_message(
-                chat_id=target_id,
-                text="🚫 *You have been banned from @racksunbot.*\n\n"
-                     "*Reason:* `Auto-banned after 2 warnings`\n\n"
-                     "Contact the admin if you think this is a mistake.",
-                parse_mode="Markdown",
-            )
-        except Exception:
-            pass
-    else:
-        remaining = MAX_WARNS - warn_count
-        warn_bar = "⚠️ " * warn_count + "⬜ " * remaining
-        await update.message.reply_text(
-            "⚠️ *Warning issued to " + target_name + "!*\n\n"
-            "*User ID:* `" + str(target_id) + "`" + reason_line + "\n"
-            "*Warnings:* `" + str(warn_count) + "/" + str(MAX_WARNS) + "`\n"
-            "*Progress:* " + warn_bar + "\n\n"
-            "_" + str(remaining) + " more warning(s) will result in auto-ban._",
-            parse_mode="Markdown",
-        )
-        try:
-            notify = (
-                "⚠️ *You have received a warning!*\n\n"
-                "*Bot:* @racksunbot" + reason_line + "\n"
-                "*Warnings:* `" + str(warn_count) + "/" + str(MAX_WARNS) + "`\n"
-                "*Progress:* " + warn_bar + "\n\n"
-                "_" + str(remaining) + " more warning(s) will result in auto-ban._"
-            )
-            await context.bot.send_message(chat_id=target_id, text=notify, parse_mode="Markdown")
-        except Exception:
-            pass
-
-
-async def warns_command(update, context):
-    user_id = update.message.from_user.id
-    if not await check_admin(update, context):
-        return
-
-    target_id, _, err = await resolve_target_id(update, context, context.args or [])
-    if not target_id:
-        if err == "no_args":
-            await update.message.reply_text(
-                "*Usage:* `/warns <@username / user_id>`\n"
-                "Or reply to a message: `/warns`\n\n"
-                "Example: `/warns @drouv` ya `/warns 98877655`",
-                parse_mode="Markdown",
-            )
-        else:
-            await update.message.reply_text(err or "❌ *Invalid input!*", parse_mode="Markdown")
-        return
-
-    row = get_user_info_db(target_id)
-    target_name = val(row[1]) if row else str(target_id)
-    warn_count = get_warn_count_db(target_id)
-    MAX_WARNS = 2
-    warn_bar = "⚠️ " * warn_count + "⬜ " * (MAX_WARNS - warn_count)
-
-    await update.message.reply_text(
-        "⚠️ *Warnings for " + target_name + "*\n\n"
-        "*User ID:* `" + str(target_id) + "`\n"
-        "*Warnings:* `" + str(warn_count) + "/" + str(MAX_WARNS) + "`\n"
-        "*Progress:* " + warn_bar,
-        parse_mode="Markdown",
-    )
-
-
-async def resetwarn_command(update, context):
-    user_id = update.message.from_user.id
-    if not await check_admin(update, context):
-        return
-
-    target_id, _, err = await resolve_target_id(update, context, context.args or [])
-    if not target_id:
-        if err == "no_args":
-            await update.message.reply_text(
-                "*Usage:* `/resetwarn <@username / user_id>`\n"
-                "Or reply to a message: `/resetwarn`\n\n"
-                "Example: `/resetwarn @drouv` ya `/resetwarn 98877655`",
-                parse_mode="Markdown",
-            )
-        else:
-            await update.message.reply_text(err or "❌ *Invalid input!*", parse_mode="Markdown")
-        return
-
-    row = get_user_info_db(target_id)
-    target_name = val(row[1]) if row else str(target_id)
-    reset_warn_db(target_id)
-    await update.message.reply_text(
-        "✅ *Warnings reset for " + target_name + "!*\n\n"
-        "*User ID:* `" + str(target_id) + "`\n"
-        "*Warnings:* `0/2`",
-        parse_mode="Markdown",
-    )
 
 
 async def adminhelp_command(update, context):
@@ -1278,42 +839,23 @@ async def adminhelp_command(update, context):
     text = (
         "🛡 *Admin Commands*\n\n"
         "━━━━━━━━━━━━━━━\n"
-        "⚠️ *WARN SYSTEM*\n"
-        "━━━━━━━━━━━━━━━\n"
-        "`/warn` — Warning do _(reply ya ID, reason optional)_\n"
-        "  3 warnings = auto ban ⚠️⚠️⚠️\n\n"
-        "`/warns` — Kisi ki warnings dekho _(reply ya ID)_\n\n"
-        "`/resetwarn` — Warnings reset karo _(reply ya ID)_\n\n"
-        "━━━━━━━━━━━━━━━\n"
-        "🚫 *BAN SYSTEM*\n"
-        "━━━━━━━━━━━━━━━\n"
-        "`/ban` — Ban karo _(reply ya ID, reason optional)_\n\n"
-        "`/unban` — Unban karo _(reply ya ID)_\n\n"
-        "`/banlist` — Saare banned users\n\n"
-        "━━━━━━━━━━━━━━━\n"
-        "🔇 *MUTE SYSTEM*\n"
-        "━━━━━━━━━━━━━━━\n"
-        "`/mute` — Mute karo _(reply ya ID, reason optional)_\n\n"
-        "`/unmute` — Unmute karo _(reply ya ID)_\n\n"
-        "`/mutelist` — Saare muted users\n\n"
-        "━━━━━━━━━━━━━━━\n"
         "⭐ *PREMIUM SYSTEM*\n"
         "━━━━━━━━━━━━━━━\n"
-        "`/premium <uid> <days>` — Premium do\n"
+        "`/premium <uid> <days>` — Give premium\n"
         "  Example: `/premium 123456789 30`\n\n"
-        "`/removepremium <uid>` — Premium hatao\n\n"
-        "`/premiumlist` — Saare premium users\n\n"
-        "🆓 *Free limits:* Number=15/day | TG=10/day\n\n"
+        "`/removepremium <uid>` — Remove premium\n\n"
+        "`/premiumlist` — All premium users\n\n"
+        "🆓 *Free limits:* Number=15/day | Aadhar=15/day | Vehicle=5/day | TG=10/day\n\n"
         "━━━━━━━━━━━━━━━\n"
         "📋 *OTHER ADMIN*\n"
         "━━━━━━━━━━━━━━━\n"
         "`/stats` — Bot stats\n\n"
-        "`/info` — Kisi ki info _(reply ya ID)_\n\n"
-        "`/reply` — User ko message bhejo\n\n"
-        "`/broadcast` — Sab ko message\n\n"
-        "`/maintenance on/off` — Bot band/chalu\n\n"
+        "`/info` — User info _(reply or ID)_\n\n"
+        "`/reply` — Send message to user\n\n"
+        "`/broadcast` — Broadcast to all users\n\n"
+        "`/maintenance on/off` — Enable/disable maintenance\n\n"
         "━━━━━━━━━━━━━━━\n"
-        "_Tip: Reply karke command use karo — ID yaad nahi rakhna padega!_"
+        "_Tip: Reply to a message and use command — no need to remember IDs!_"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
@@ -2060,15 +1602,6 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("report", report_command))
     app.add_handler(CommandHandler("reply", reply_command))
     app.add_handler(CommandHandler("broadcast", broadcast_command))
-    app.add_handler(CommandHandler("ban", ban_command))
-    app.add_handler(CommandHandler("unban", unban_command))
-    app.add_handler(CommandHandler("banlist", banlist_command))
-    app.add_handler(CommandHandler("mute", mute_command))
-    app.add_handler(CommandHandler("unmute", unmute_command))
-    app.add_handler(CommandHandler("mutelist", mutelist_command))
-    app.add_handler(CommandHandler("warn", warn_command))
-    app.add_handler(CommandHandler("warns", warns_command))
-    app.add_handler(CommandHandler("resetwarn", resetwarn_command))
     app.add_handler(CommandHandler("premium", premium_command))
     app.add_handler(CommandHandler("removepremium", removepremium_command))
     app.add_handler(CommandHandler("premiumlist", premiumlist_command))

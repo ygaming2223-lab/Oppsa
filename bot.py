@@ -37,6 +37,7 @@ NUMBER_API_URL2 = "https://divyansh.store/num-info?key=Sinc&number={number}"
 AADHAR_API_URL = "https://ayush-multi-apiv2.onrender.com/adhar?q={aadhar}"
 VEH_API_URL = "https://ayush-multi-apiv2.onrender.com/veh?q={veh}"
 TG_LOOKUP_API = "https://api.subhxcosmo.in/api?key=RACKSUN&type=tg&term={term}"
+TG_LOOKUP_API2 = "https://styosint.in/api/tg?key=ultra&info={term}"
 
 CHANNEL_USERNAME = "@racksun19"
 CHANNEL_LINK = "https://t.me/racksun19"
@@ -1325,14 +1326,35 @@ async def lookup(update, context):
 
     term = user_input if is_username else digits_only
 
+    data = None
+    used_api = ""
+
+    # Try new API first
     try:
-        api_url = TG_LOOKUP_API.format(term=term)
-        data = await fetch_json(api_url)
-    except Exception as e:
-        await delete_msg(context, chat_id, searching.message_id)
-        await update.message.reply_text("*Server Error!*\n\nCould not reach the lookup server. Try again later.", parse_mode="Markdown")
-        await log_error_to_admin(context, "lookup: " + str(e))
-        return
+        api_url2 = TG_LOOKUP_API2.format(term=term)
+        data2 = await fetch_json(api_url2)
+        # Check if new API returned valid data
+        if data2 and isinstance(data2, dict):
+            status2 = str(data2.get("status", "")).lower()
+            msg2 = str(data2.get("message", "") or data2.get("msg", "") or data2.get("error", "")).lower()
+            has_error = status2 in ("false", "0", "error", "fail", "failed") or "not found" in msg2 or "invalid" in msg2 or "no data" in msg2
+            if not has_error:
+                data = data2
+                used_api = "new"
+    except Exception:
+        pass
+
+    # Fallback to old API if new API gave no result
+    if data is None:
+        try:
+            api_url = TG_LOOKUP_API.format(term=term)
+            data = await fetch_json(api_url)
+            used_api = "old"
+        except Exception as e:
+            await delete_msg(context, chat_id, searching.message_id)
+            await update.message.reply_text("*Server Error!*\n\nCould not reach the lookup server. Try again later.", parse_mode="Markdown")
+            await log_error_to_admin(context, "lookup: " + str(e))
+            return
 
     await delete_msg(context, chat_id, searching.message_id)
 

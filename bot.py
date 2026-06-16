@@ -376,7 +376,7 @@ def check_cooldown(user_id):
     return True, 0
 
 
-async def fetch_json(url, timeout=8):
+async def fetch_json(url, timeout=5):
     loop = asyncio.get_event_loop()
     def _get():
         resp = requests.get(url, timeout=timeout)
@@ -1320,7 +1320,7 @@ async def lookup(update, context):
 
     async def _try_fetch(url):
         try:
-            r = await fetch_json(url, timeout=6)
+            r = await fetch_json(url, timeout=4)
             return r if _is_valid(r) else None
         except Exception:
             return None
@@ -1365,7 +1365,7 @@ async def lookup(update, context):
             )
 
     # Build result from whatever the API returns
-    SKIP_KEYS = {"status", "message", "msg", "error", "success", "code", "key", "type", "owner", "cached", "attempt"}
+    SKIP_KEYS = {"status", "message", "msg", "error", "success", "code", "key", "type", "owner", "cached", "attempt", "powered by", "time", "version", "powered_by"}
     LABEL_MAP = {
         "number": "Number", "phone": "Number", "mobile": "Number",
         "id": "TG ID", "user_id": "TG ID", "tg_id": "TG ID", "userid": "TG ID",

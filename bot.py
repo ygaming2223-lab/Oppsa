@@ -4,7 +4,7 @@ import time
 import math
 import asyncio
 import sqlite3
-import aiohttp
+import requests
 from datetime import datetime
 from flask import Flask
 from threading import Thread
@@ -378,11 +378,12 @@ def check_cooldown(user_id):
 
 
 async def fetch_json(url, timeout=5):
-    timeout_obj = aiohttp.ClientTimeout(total=timeout)
-    async with aiohttp.ClientSession(timeout=timeout_obj) as session:
-        async with session.get(url) as resp:
-            resp.raise_for_status()
-            return await resp.json(content_type=None)
+    loop = asyncio.get_event_loop()
+    def _get():
+        resp = requests.get(url, timeout=timeout)
+        resp.raise_for_status()
+        return resp.json()
+    return await loop.run_in_executor(None, _get)
 
 
 def clean_address(addr):

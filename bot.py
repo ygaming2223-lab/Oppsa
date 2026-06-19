@@ -4,7 +4,7 @@ import time
 import math
 import asyncio
 import sqlite3
-import requests
+import aiohttp
 from datetime import datetime
 from flask import Flask
 from threading import Thread
@@ -206,6 +206,7 @@ def remove_premium_db(user_id):
 
 
 def is_premium_user(user_id):
+    return True  # Premium system disabled — all users have unlimited access
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("SELECT is_premium, premium_expiry FROM users WHERE user_id=?", (user_id,))
@@ -377,12 +378,11 @@ def check_cooldown(user_id):
 
 
 async def fetch_json(url, timeout=5):
-    loop = asyncio.get_event_loop()
-    def _get():
-        resp = requests.get(url, timeout=timeout)
-        resp.raise_for_status()
-        return resp.json()
-    return await loop.run_in_executor(None, _get)
+    timeout_obj = aiohttp.ClientTimeout(total=timeout)
+    async with aiohttp.ClientSession(timeout=timeout_obj) as session:
+        async with session.get(url) as resp:
+            resp.raise_for_status()
+            return await resp.json(content_type=None)
 
 
 def clean_address(addr):
@@ -1320,17 +1320,33 @@ async def lookup(update, context):
 
     async def _try_fetch(url):
         try:
-            r = await fetch_json(url, timeout=4)
+            r = await fetch_json(url, timeout=7)
             return r if _is_valid(r) else None
         except Exception:
             return None
 
-    # Call both APIs in parallel, use first valid response
-    _results = await asyncio.gather(
-        _try_fetch(TG_LOOKUP_API3.format(term=term)),
-        _try_fetch(TG_LOOKUP_API4.format(term=term)),
-    )
-    data = next((r for r in _results if r is not None), None)
+    # Call both APIs in parallel, return as soon as first valid result arrives
+    _tasks = [
+        asyncio.ensure_future(_try_fetch(TG_LOOKUP_API3.format(term=term))),
+        asyncio.ensure_future(_try_fetch(TG_LOOKUP_API4.format(term=term))),
+    ]
+    data = None
+    _pending = set(_tasks)
+    while _pending and data is None:
+        _done, _pending = await asyncio.wait(_pending, return_when=asyncio.FIRST_COMPLETED)
+        for _t in _done:
+            if _t.result() is not None:
+                data = _t.result()
+                for _p in _pending:
+                    _p.cancel()
+                break
+    # Retry once if both failed (handles cold-start/timeout)
+    if data is None:
+        _results = await asyncio.gather(
+            _try_fetch(TG_LOOKUP_API3.format(term=term)),
+            _try_fetch(TG_LOOKUP_API4.format(term=term)),
+        )
+        data = next((r for r in _results if r is not None), None)
 
     await delete_msg(context, chat_id, searching.message_id)
 
